@@ -15,7 +15,7 @@ import getpass
 from datetime import datetime
 from typing import Optional, List, Dict
 from wealthsimple_v2 import WealthsimpleV2
-
+import asyncio
 
 def search_securities(ws: WealthsimpleV2):
     """Allow user to search for securities."""
@@ -91,6 +91,7 @@ def search_securities(ws: WealthsimpleV2):
     try:
         idx = int(selection) - 1
         if 0 <= idx < len(display_results):
+            print(display_results[idx])
             return display_results[idx]
         else:
             print("Invalid selection.")
@@ -550,9 +551,7 @@ def trade_options(ws: WealthsimpleV2, account_id: str, security: Dict):
     except Exception as e:
         print(f"\n✗ Error placing order: {e}")
 
-
 def main():
-    """Main interactive trading loop."""
     try:
         print("=" * 60)
         print("Wealthsimple Interactive Trading")
@@ -594,53 +593,29 @@ def main():
             
             print("✓ Authentication successful!")
             print(f"✓ Identity ID: {ws.identity_id}")
-        
-        while True:
-            # Search for security
-            security = search_securities(ws)
-            if not security:
-                retry = input("\nTry another search? (yes/no): ").strip().lower()
-                if retry not in ['yes', 'y']:
-                    break
-                continue
-            
-            # Show details
-            security = display_security_details(ws, security)
-            
-            # Select account
-            account_id = select_account(ws)
-            if not account_id:
-                print("No account selected.")
-                continue
-            
-            # Choose trading type
-            print("\n" + "=" * 60)
-            print("SELECT TRADING TYPE")
-            print("=" * 60)
-            print("1. Trade Stock")
-            
-            if security.get('optionsEligible'):
-                print("2. Trade Options")
-                choice = input("\nSelect (1-2): ").strip()
-            else:
-                print("\nNote: Options trading not available for this security.")
-                choice = "1"
-            
-            if choice == "1":
-                trade_stock(ws, account_id, security)
-            elif choice == "2" and security.get('optionsEligible'):
-                trade_options(ws, account_id, security)
-            else:
-                print("Invalid choice.")
-            
-            # Continue?
-            print("\n" + "=" * 60)
-            another = input("Place another trade? (yes/no): ").strip().lower()
-            if another not in ['yes', 'y']:
-                break
-        
-        print("\nThank you for using Wealthsimple Interactive Trading!")
-        
+
+        # Get all positions
+        positions = ws.get_positions()
+
+        total_value = 0
+        print("Your Portfolio:")
+        print("=" * 60)
+
+        for position in positions:
+            symbol = position['security']['stock']['symbol']
+            quantity = position['quantity']
+            value = position['totalValue']['amount']
+            pnl = position.get('profitLossAmount', {}).get('amount', 0)
+
+            total_value += float(value)
+
+            print(f"{symbol:6s} | Qty: {quantity:>6} | Value: ${float(value):>10.2f} | P/L: ${pnl:>8.2f}")
+
+        print("=" * 60)
+        print(f"Total Portfolio Value: ${total_value:,.2f}")
+
+        ws.logout()
+                
     except KeyboardInterrupt:
         print("\n\nInterrupted by user.")
         ws.logout()
